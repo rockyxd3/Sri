@@ -177,6 +177,46 @@ async def welcome(client, message: Message):
                     reply_markup=InlineKeyboardMarkup(out),
                 )
                 await add_served_chat(message.chat.id)
+                if await is_on_off(2):
+                    try:
+                        added_by = "Unknown User"
+                        added_by_id = "Unknown"
+                        added_by_username = "None"
+                        if message.from_user:
+                            added_by = message.from_user.mention
+                            added_by_id = message.from_user.id
+                            added_by_username = (
+                                f"@{message.from_user.username}"
+                                if message.from_user.username
+                                else "None"
+                            )
+                        elif message.sender_chat:
+                            added_by = message.sender_chat.title
+                            added_by_id = message.sender_chat.id
+                            added_by_username = (
+                                f"@{message.sender_chat.username}"
+                                if message.sender_chat.username
+                                else "None"
+                            )
+                        chat_username = (
+                            f"@{message.chat.username}"
+                            if message.chat.username
+                            else "None"
+                        )
+                        await app.send_message(
+                            chat_id=config.LOGGER_ID,
+                            text=(
+                                f"{app.mention} was added to a new group.\n\n"
+                                f"<b>Group Name :</b> {message.chat.title}\n"
+                                f"<b>Group ID :</b> <code>{message.chat.id}</code>\n"
+                                f"<b>Group Username :</b> {chat_username}\n"
+                                f"<b>Added By :</b> {added_by}\n"
+                                f"<b>Adder ID :</b> <code>{added_by_id}</code>\n"
+                                f"<b>Adder Username :</b> {added_by_username}"
+                            ),
+                        )
+                    except Exception as logger_error:
+                        LOGGER(__name__).info(logger_error)
                 await message.stop_propagation()
         except Exception as ex:
             LOGGER(__name__).info(ex)
