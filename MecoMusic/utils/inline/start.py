@@ -38,7 +38,7 @@ def private_panel(_):
         [
             InlineKeyboardButton(
                 text=_["S_B_6"],
-                user_id=config.OWNER_ID,
+                url=f"https://t.me/{config.OWNER_USERNAME}",
                 style=ButtonStyle.DEFAULT,
             ),
             InlineKeyboardButton(
