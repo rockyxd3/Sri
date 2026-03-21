@@ -39,7 +39,7 @@ def private_panel(_):
             InlineKeyboardButton(
                 text=_["S_B_6"],
                 user_id=config.OWNER_ID,
-                style=ButtonStyle.SECONDARY,
+                style=ButtonStyle.DEFAULT,
             ),
             InlineKeyboardButton(
                 text=_["S_B_5"],
