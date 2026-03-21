@@ -3,32 +3,59 @@ import re
 
 import aiofiles
 import aiohttp
-import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 from unidecode import unidecode
 from youtubesearchpython.future import Video
 
 from MecoMusic import YouTube, app
 from config import YOUTUBE_IMG_URL
 
+CANVAS_SIZE = (1280, 720)
+FRAME_RECT = (374, 118, 906, 626)
+ART_RECT = (402, 146, 878, 452)
+INFO_RECT = (392, 474, 888, 602)
+TITLE_AREA_WIDTH = 316
+
 
 def changeImageSize(maxWidth, maxHeight, image):
-    widthRatio = maxWidth / image.size[0]
-    heightRatio = maxHeight / image.size[1]
-    newWidth = int(widthRatio * image.size[0])
-    newHeight = int(heightRatio * image.size[1])
-    newImage = image.resize((newWidth, newHeight))
-    return newImage
+    return ImageOps.contain(
+        image,
+        (maxWidth, maxHeight),
+        Image.Resampling.LANCZOS,
+    )
 
-def circle(img): 
-     h,w=img.size 
-     a = Image.new('L', [h,w], 0) 
-     b = ImageDraw.Draw(a) 
-     b.pieslice([(0, 0), (h,w)], 0, 360, fill = 255,outline = "white") 
-     c = np.array(img) 
-     d = np.array(a) 
-     e = np.dstack((c, d)) 
-     return Image.fromarray(e)
+
+def fit_image(image, size):
+    return ImageOps.fit(
+        image,
+        size,
+        method=Image.Resampling.LANCZOS,
+        centering=(0.5, 0.5),
+    )
+
+
+def add_round_corners(image, radius):
+    rounded = image.convert("RGBA")
+    mask = Image.new("L", rounded.size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rounded_rectangle(
+        (0, 0, rounded.size[0], rounded.size[1]),
+        radius=radius,
+        fill=255,
+    )
+    output = Image.new("RGBA", rounded.size, (0, 0, 0, 0))
+    output.paste(rounded, (0, 0), mask)
+    return output
+
+
+def circle(image, size):
+    avatar = fit_image(image.convert("RGBA"), (size, size))
+    mask = Image.new("L", (size, size), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0, size, size), fill=255)
+    output = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    output.paste(avatar, (0, 0), mask)
+    return output
 
 
 def clear(text):
@@ -40,10 +67,50 @@ def clear(text):
     return title.strip()
 
 
+def load_font(name, size):
+    try:
+        return ImageFont.truetype(f"MecoMusic/assets/{name}", size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def truncate_text(draw, text, font, max_width):
+    text = unidecode(clear(text or "")) or "Unknown Title"
+    if draw.textlength(text, font=font) <= max_width:
+        return text
+    ellipsis = "..."
+    while text and draw.textlength(f"{text}{ellipsis}", font=font) > max_width:
+        text = text[:-1]
+    return f"{text.rstrip()}{ellipsis}" if text else ellipsis
+
+
+def add_glow_layer():
+    glow_layer = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(glow_layer)
+    draw.ellipse((70, 360, 530, 770), fill=(255, 112, 72, 82))
+    draw.ellipse((710, 40, 1140, 380), fill=(94, 182, 255, 56))
+    draw.ellipse((600, 430, 1160, 860), fill=(255, 196, 108, 40))
+    return glow_layer.filter(ImageFilter.GaussianBlur(90))
+
+
+def add_shadow(rect, radius, blur, offset=(0, 18)):
+    shadow = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(shadow)
+    x1, y1, x2, y2 = rect
+    ox, oy = offset
+    draw.rounded_rectangle(
+        (x1 + ox, y1 + oy, x2 + ox, y2 + oy),
+        radius=radius,
+        fill=(0, 0, 0, 135),
+    )
+    return shadow.filter(ImageFilter.GaussianBlur(blur))
+
+
 async def get_thumb(videoid,user_id):
     final_path = f"cache/{videoid}_{user_id}.png"
     raw_thumb_path = f"cache/thumb{videoid}.png"
     thumbnail = YOUTUBE_IMG_URL
+    os.makedirs("cache", exist_ok=True)
 
     if os.path.isfile(final_path):
         return final_path
@@ -91,76 +158,139 @@ async def get_thumb(videoid,user_id):
                 else:
                     return thumbnail
 
-        sp = None
+        requester_photo = None
+        fallback_photo = None
         for target_id in (user_id, app.id):
+            downloaded_photo = None
             try:
                 async for photo in app.get_chat_photos(target_id, limit=1):
-                    sp = await app.download_media(
+                    downloaded_photo = await app.download_media(
                         photo.file_id, file_name=f"cache/{target_id}.jpg"
                     )
                     break
             except:
                 continue
-            if sp:
-                break
+            if target_id == user_id and downloaded_photo:
+                requester_photo = downloaded_photo
+            elif target_id == app.id and downloaded_photo:
+                fallback_photo = downloaded_photo
 
         youtube = Image.open(raw_thumb_path).convert("RGBA")
-        image1 = changeImageSize(1280, 720, youtube)
-        image2 = image1.convert("RGBA")
-        background = image2.filter(filter=ImageFilter.BoxBlur(10))
-        enhancer = ImageEnhance.Brightness(background)
-        background = enhancer.enhance(0.5)
-        y=changeImageSize(200,200,circle(youtube)) 
-        background.paste(y,(45,225),mask=y)
-        if sp and os.path.isfile(sp):
-            xp = Image.open(sp).convert("RGBA")
-            a=changeImageSize(200,200,circle(xp)) 
-            background.paste(a,(1045,225),mask=a)
-        draw = ImageDraw.Draw(background)
-        arial = ImageFont.truetype("MecoMusic/assets/font2.ttf", 30)
-        font = ImageFont.truetype("MecoMusic/assets/font.ttf", 30)
-        draw.text((1110, 8), unidecode(app.name), fill="white", font=arial)
+        background = fit_image(youtube, CANVAS_SIZE)
+        background = background.filter(ImageFilter.GaussianBlur(24))
+        background = ImageEnhance.Brightness(background).enhance(0.36)
+        background = ImageEnhance.Color(background).enhance(0.82)
+
+        canvas = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 255))
+        canvas.alpha_composite(background)
+        canvas.alpha_composite(Image.new("RGBA", CANVAS_SIZE, (10, 12, 18, 116)))
+        canvas.alpha_composite(add_glow_layer())
+        canvas.alpha_composite(add_shadow(FRAME_RECT, radius=40, blur=28))
+        canvas.alpha_composite(add_shadow(ART_RECT, radius=28, blur=18, offset=(0, 12)))
+
+        frame_layer = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
+        frame_draw = ImageDraw.Draw(frame_layer)
+        frame_draw.rounded_rectangle(
+            FRAME_RECT,
+            radius=40,
+            fill=(255, 255, 255, 54),
+            outline=(255, 255, 255, 176),
+            width=2,
+        )
+        frame_draw.rounded_rectangle(
+            (FRAME_RECT[0] + 12, FRAME_RECT[1] + 12, FRAME_RECT[2] - 12, FRAME_RECT[3] - 12),
+            radius=32,
+            fill=(255, 255, 255, 12),
+        )
+        canvas.alpha_composite(frame_layer)
+
+        artwork_size = (ART_RECT[2] - ART_RECT[0], ART_RECT[3] - ART_RECT[1])
+        artwork = add_round_corners(fit_image(youtube, artwork_size), 28)
+        canvas.alpha_composite(artwork, (ART_RECT[0], ART_RECT[1]))
+
+        info_layer = Image.new("RGBA", CANVAS_SIZE, (0, 0, 0, 0))
+        info_draw = ImageDraw.Draw(info_layer)
+        info_draw.rounded_rectangle(
+            INFO_RECT,
+            radius=26,
+            fill=(44, 44, 52, 196),
+            outline=(255, 255, 255, 58),
+            width=1,
+        )
+        info_draw.rounded_rectangle(
+            (INFO_RECT[0], INFO_RECT[1], INFO_RECT[2], INFO_RECT[1] + 28),
+            radius=26,
+            fill=(255, 255, 255, 12),
+        )
+
+        duration_rect = (ART_RECT[2] - 136, ART_RECT[1] + 18, ART_RECT[2] - 18, ART_RECT[1] + 64)
+        views_rect = (ART_RECT[0] + 18, ART_RECT[3] - 58, ART_RECT[0] + 168, ART_RECT[3] - 16)
+        brand_rect = (ART_RECT[0] + 18, ART_RECT[1] + 18, ART_RECT[0] + 164, ART_RECT[1] + 58)
+
+        for rect in (duration_rect, views_rect, brand_rect):
+            info_draw.rounded_rectangle(
+                rect,
+                radius=18,
+                fill=(12, 14, 18, 182),
+                outline=(255, 255, 255, 68),
+                width=1,
+            )
+        canvas.alpha_composite(info_layer)
+
+        avatar_source = youtube
+        if requester_photo and os.path.isfile(requester_photo):
+            avatar_source = Image.open(requester_photo).convert("RGBA")
+        elif fallback_photo and os.path.isfile(fallback_photo):
+            avatar_source = Image.open(fallback_photo).convert("RGBA")
+        avatar = add_round_corners(fit_image(avatar_source, (96, 96)), 24)
+        canvas.alpha_composite(avatar, (INFO_RECT[0] + 18, INFO_RECT[1] + 16))
+
+        draw = ImageDraw.Draw(canvas)
+        title_font = load_font("font2.ttf", 46)
+        meta_font = load_font("font.ttf", 25)
+        small_font = load_font("font.ttf", 22)
+        chip_font = load_font("font.ttf", 23)
+
+        safe_title = truncate_text(draw, title, title_font, TITLE_AREA_WIDTH)
+        safe_brand = truncate_text(draw, f"Powered By : {app.name}", meta_font, TITLE_AREA_WIDTH)
+        safe_channel = truncate_text(draw, channel, small_font, 210)
+        safe_views = truncate_text(draw, views, chip_font, 118)
+        safe_duration = truncate_text(draw, duration, chip_font, 92)
+        app_badge = truncate_text(draw, app.name, chip_font, 118)
+
+        text_x = INFO_RECT[0] + 136
+        draw.text((text_x, INFO_RECT[1] + 12), safe_title, fill="white", font=title_font)
+        draw.text((text_x, INFO_RECT[1] + 62), safe_brand, fill=(236, 236, 236), font=meta_font)
         draw.text(
-                (55, 560),
-                f"{channel} | {views[:23]}",
-                (255, 255, 255),
-                font=arial,
-            )
+            (text_x, INFO_RECT[1] + 96),
+            f"{safe_channel}  |  {safe_duration}",
+            fill=(219, 219, 219),
+            font=small_font,
+        )
+
         draw.text(
-                (57, 600),
-                clear(title),
-                (255, 255, 255),
-                font=font,
-            )
-        draw.line(
-                [(55, 660), (1220, 660)],
-                fill="white",
-                width=5,
-                joint="curve",
-            )
-        draw.ellipse(
-                [(918, 648), (942, 672)],
-                outline="white",
-                fill="white",
-                width=15,
-            )
+            (brand_rect[0] + 16, brand_rect[1] + 10),
+            app_badge,
+            fill=(255, 255, 255),
+            font=chip_font,
+        )
         draw.text(
-                (36, 685),
-                "00:00",
-                (255, 255, 255),
-                font=arial,
-            )
+            (views_rect[0] + 18, views_rect[1] + 7),
+            safe_views,
+            fill=(255, 255, 255),
+            font=chip_font,
+        )
         draw.text(
-                (1185, 685),
-                f"{duration[:23]}",
-                (255, 255, 255),
-                font=arial,
-            )
+            (duration_rect[0] + 18, duration_rect[1] + 8),
+            safe_duration,
+            fill=(255, 255, 255),
+            font=chip_font,
+        )
         try:
             os.remove(raw_thumb_path)
         except:
             pass
-        background.save(final_path)
+        canvas.convert("RGB").save(final_path, quality=95)
         return final_path
     except Exception:
         if os.path.isfile(raw_thumb_path):
