@@ -13,7 +13,11 @@ def start_panel(_):
                 url=f"https://t.me/{app.username}?startgroup=true",
                 style=ButtonStyle.PRIMARY,
             ),
-            InlineKeyboardButton(text=_["S_B_2"], url=config.SUPPORT_CHAT),
+            InlineKeyboardButton(
+                text=_["S_B_2"], 
+                url=config.SUPPORT_CHAT,
+                style=ButtonStyle.PRIMARY,
+            ),
         ],
     ]
     return buttons
