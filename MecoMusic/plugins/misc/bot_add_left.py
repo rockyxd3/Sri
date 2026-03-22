@@ -1,7 +1,7 @@
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from config import LOG, LOGGER_ID
+from config import LOGGER_ID, LOGGER_ID
 from MecoMusic import app
 from MecoMusic.utils.database import (
     delete_served_chat,
@@ -13,7 +13,7 @@ from MecoMusic.utils.database import (
 @app.on_message(filters.new_chat_members)
 async def on_bot_added(_, message):
     try:
-        if not await is_on_off(LOG):
+        if not await is_on_off(LOGGER_ID):
             return
         userbot = await get_assistant(message.chat.id)
         chat = message.chat
@@ -54,7 +54,7 @@ async def on_bot_added(_, message):
 @app.on_message(filters.left_chat_member)
 async def on_bot_kicked(_, message: Message):
     try:
-        if not await is_on_off(LOG):
+        if not await is_on_off(LOGGER_ID):
             return
         userbot = await get_assistant(message.chat.id)
 
