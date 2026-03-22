@@ -56,11 +56,13 @@ def queue_back_markup(_, CPLAY):
                 InlineKeyboardButton(
                     text=_["BACK_BUTTON"],
                     callback_data=f"queue_back_timer {CPLAY}",
-                    style=ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id=5395476176527447827,
+                    style=ButtonStyle.PRIMARY
                 ),
                 InlineKeyboardButton(
                     text=_["CLOSE_BUTTON"],
                     callback_data="close",
+                    icon_custom_emoji_id=5039614900280754969,
                     style=ButtonStyle.DANGER,
                 ),
             ]
@@ -81,13 +83,15 @@ def aq_markup(_, chat_id):
             InlineKeyboardButton(
                 text="α∂∂ мє",
                 url="https://t.me/ChaahatMusicBot?startgroup=true",
-                style=ButtonStyle.SUCCESS,
+                icon_custom_emoji_id=5395476176527447827,
+                style=ButtonStyle.SUCCESS
                 
             ),
             InlineKeyboardButton(
                 text=_["CLOSE_BUTTON"],
                 callback_data="close",
-                style=ButtonStyle.DANGER,
+                icon_custom_emoji_id=5039614900280754969,
+                style=ButtonStyle.DANGER
             
             ),
         ]
