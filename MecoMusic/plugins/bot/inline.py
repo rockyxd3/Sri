@@ -3,7 +3,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
     InlineQueryResultPhoto,
 )
-from youtubesearchpython.future import VideosSearch
+from ytSearch import VideosSearch
 
 from MecoMusic import app
 from MecoMusic.utils.inlinequery import answer
